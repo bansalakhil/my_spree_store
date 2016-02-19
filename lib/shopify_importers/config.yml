@@ -1,0 +1,5 @@
+development:
+  api_key: "63460740b9b32711552775f124ec5e2f"
+  api_password: "e938bf7766fbd101918a6c695399f1e5"
+  store_domain: "bakhil.myshopify.com"
+  per_page: 10

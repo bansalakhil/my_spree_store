@@ -35,5 +35,9 @@ module MySpreeStore
 
     # Do not swallow errors in after_commit/after_rollback callbacks.
     config.active_record.raise_in_transactional_callbacks = true
+
+    config.autoload_paths << "#{Rails.root}/lib/shopify_importers"
+    config.autoload_paths << "#{Rails.root}/lib/shopify_importers/initializers/"
+    config.autoload_paths << "#{Rails.root}/lib/shopify_importers/models"
   end
 end

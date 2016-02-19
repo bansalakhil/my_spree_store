@@ -45,6 +45,8 @@ group :development do
 end
 
 gem 'awesome_print'
+gem 'activeresource', require: "active_resource"
+gem 'faker'
 
 gem 'spree', '3.0.5'
 gem 'spree_gateway', github: 'spree/spree_gateway', branch: '3-0-stable'

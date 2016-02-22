@@ -4,3 +4,6 @@ development:
   store_domain: "bakhil.myshopify.com"
   per_page: 10
   wait_time: 0.5
+
+  # Default shipping category to be assigned for imported products
+  shipping_category: "Shopify Products" 

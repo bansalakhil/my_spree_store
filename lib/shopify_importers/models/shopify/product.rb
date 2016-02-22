@@ -1,73 +1,86 @@
-class Shopify::Customer < Shopify::Importer
-  self.site = Shopify.store_url
-  self.collection_name = "customers"
+class Shopify::Product < Shopify::Importer
+  self.site = "http://instanatural.com"
+  self.collection_name = "products"
   self.include_root_in_json =  true
   self.logger = Rails.logger
 
+  attr_accessor :imported_product
 
-  attr_accessor :imported_user
-
-  has_many :metafields, class_name: "shopify/metafield"
-  has_many :addresses, class_name: "shopify/addresses"
-
-
+  def self.default_shipping_category
+    @@default_shipping_category ||= Spree::ShippingCategory.find_or_create_by(name: Shopify.config[:shipping_category])
+  end
 
   def self.fetch_and_import(page: 1, per_page: Shopify.config[:per_page])
-    customers = fetch_all(page: page, per_page: per_page)
+    # products = fetch_all(page: page, per_page: per_page)
+    products = Shopify::Product.find(:all, {limit: 250})
 
-    Spree::user_class.transaction do 
-      customers.collect!(&:import)
+    Spree::Product.transaction do 
+      products.collect!(&:import)
     end
-    customers
+    products
   end
 
 
   def import 
-    country = Spree::Country.find_by(iso: default_address.country_code)
-    random_password = SecureRandom.hex(8)
 
-    address = {
-                firstname: default_address.first_name,
-                lastname: default_address.last_name,
-                address1: default_address.address1,
-                address2: default_address.address2,
-                company: default_address.company,                  
-                city: default_address.city,
-                zipcode: default_address.zip.present? ? default_address.zip : "00000",
-                phone: default_address.phone.present? ? default_address.phone : "0000000000",
-                country: country,
-                state: country.states.find_by(abbr: default_address.province_code)
-    }
-
-    user = Spree.user_class.new(
+    record = Spree::Product.new(
                                   # id: id,
-                                  email: email,
-                                  password: random_password,
-                                  password_confirmation: random_password,
-                                  bill_address_attributes: address,
-                                  ship_address_attributes: address,
+                                  name: title,
+                                  description: body_html,
+                                  slug: handle,
+                                  available_on: published_at,
+                                  price: default_variant.price,
+                                  sku: default_variant.sku,
+                                  shipping_category: Shopify::Product.default_shipping_category,
+                                  prototype_id: product_prototype_id,
                                   created_at: created_at,
-                                  updated_at: updated_at
+                                  updated_at: updated_at                                  
       )
 
-    unless user.save
+
+    unless record.save
       Rails.logger.debug "\n\n"
       Rails.logger.debug "#" * 80
-      Rails.logger.debug "Could not save Spree::User: #{user.inspect}"
+      Rails.logger.debug "Could not save #{record.class}: #{record.inspect}"
       Rails.logger.debug "\n"
-      Rails.logger.debug "Creating Spree::User Shopify Data:  #{self.inspect}"
+      Rails.logger.debug "Creating #{record.class} Shopify Data:  #{self.inspect}"
       Rails.logger.debug "\n"
-      Rails.logger.debug "Errors: #{user.errors.inspect}"
+      Rails.logger.debug "Errors: #{record.errors.inspect}"
       Rails.logger.debug "\n"
       Rails.logger.debug "#" * 80
-      raise "Could not save Spree::User, see log above \n\n"
+      raise "Could not save #{record.class}, see log above \n\n"
     end
 
-    self.imported_user = user
+    if images.present?
+      threads = []
+      images.sort_by{|i| i.position}.each do |shopify_image|
+        threads << fork do
+          image = Spree::Image.new(created_at: shopify_image.created_at, updated_at: shopify_image.updated_at)
+          image.attachment = shopify_image.src 
+          record.master_images << image if image.save
+        end
+      end
+       threads.each { |thr| Process.waitpid(thr) }
+    end
+
+
+
+    self.imported_product = record
     self
   end
 
 
+
+  def default_variant
+    @default_variant ||= variants.first{|x| x.position == 1}
+  end
+
+  def product_prototype_id
+    if product_type.present?
+      prototype = Spree::Prototype.find_or_create_by(name: product_type)
+      prototype.id
+    end
+  end
 
 
 

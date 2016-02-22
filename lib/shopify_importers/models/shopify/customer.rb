@@ -15,27 +15,36 @@ class Shopify::Customer < ActiveResource::Base
 
 
   class << self
+
+    def fetch_customers(limit: 50, page: 1)
+      begin
+        find(:all, params: {limit: limit, page: page})
+      
+      rescue ActiveResource::ClientError => e
+        Rails.logger.debug "Exception occurred: #{e.message}. Waiting for #{Shopify.config[:wait_time]} seconds before retrying"
+        sleep Shopify.config[:wait_time]
+        retry
+      end        
+    end
+
     def fetch_all(page: 1, per_page: Shopify.config[:per_page])
       total = get(:count)
       Rails.logger.debug "Total records in shopify: #{total}"
       customers = []
-      while( (customer_batch = find(:all, params: {limit: per_page, page: page})).size > 0 )
-        Rails.logger.debug "Fetching  page: #{page}"
-        # Rails.logger.debug "############################################################ #{customer_batch.size}}"
-        customers.concat(customer_batch)
-        page += 1
+
+      while( (customer_batch = fetch_customers(limit: per_page, page: page) ).size > 0 )
+          Rails.logger.debug "Fetching  page: #{page}"
+          # Rails.logger.debug "############################################################ #{customer_batch.size}}"
+          customers.concat(customer_batch)
+          page += 1
       end
 
       if total != customers.size
+        msg = "Total #{total} records exists on shopify, but only #{customers.size} were fetched"
         Rails.logger.debug "#" *80
+        Rails.logger.debug msg
         Rails.logger.debug "#" *80
-        Rails.logger.debug "#" *80
-        Rails.logger.debug "#" *80
-        Rails.logger.debug "Total #{total} records exists on shopify, but only #{customers.size} were fetched"
-        Rails.logger.debug "#" *80
-        Rails.logger.debug "#" *80
-        Rails.logger.debug "#" *80
-        Rails.logger.debug "#" *80
+        raise msg
       end
 
       customers
@@ -67,13 +76,13 @@ class Shopify::Customer < ActiveResource::Base
                 address2: default_address.address2,
                 company: default_address.company,                  
                 city: default_address.city,
-                zipcode: default_address.zip || "00000",
-                phone: default_address.phone || "0000000000",
+                zipcode: default_address.zip.present? ? default_address.zip : "00000",
+                phone: default_address.phone.present? ? default_address.phone : "0000000000",
                 country: country,
                 state: country.states.find_by(abbr: default_address.province_code)
     }
 
-    user = Spree.user_class.create(
+    user = Spree.user_class.new(
                                   # id: id,
                                   email: email,
                                   password: random_password,
@@ -81,6 +90,19 @@ class Shopify::Customer < ActiveResource::Base
                                   bill_address_attributes: address,
                                   ship_address_attributes: address
       )
+
+    unless user.save
+      Rails.logger.debug "\n\n"
+      Rails.logger.debug "#" * 80
+      Rails.logger.debug "Could not save Spree::User: #{user.inspect}"
+      Rails.logger.debug "\n"
+      Rails.logger.debug "Creating Spree::User Shopify Data:  #{self.inspect}"
+      Rails.logger.debug "\n"
+      Rails.logger.debug "Errors: #{user.errors.inspect}"
+      Rails.logger.debug "\n"
+      Rails.logger.debug "#" * 80
+      raise "Could not save Spree::User, see log above \n\n"
+    end
 
     self.imported_user = user
     self
@@ -168,11 +190,3 @@ end
 #   }
 # end
 # 
-4.times do
-  fork{
-    100.times do 
-      c = Shopify::Customer.get_fake_customer
-      c.save
-    end
-  }
-end

@@ -1,4 +1,5 @@
 class Shopify::Product < Shopify::Importer
+  # self.site = Shopify.store_url
   self.site = "http://instanatural.com"
   self.collection_name = "products"
   self.include_root_in_json =  true
@@ -30,13 +31,14 @@ class Shopify::Product < Shopify::Importer
                                   slug: handle,
                                   available_on: published_at,
                                   price: default_variant.price,
-                                  sku: default_variant.sku,
                                   shipping_category: Shopify::Product.default_shipping_category,
                                   prototype_id: product_prototype_id,
                                   created_at: created_at,
                                   updated_at: updated_at                                  
       )
 
+    # set master variant's sku
+    record.sku = default_variant.sku if variants.size == 1
 
     unless record.save
       Rails.logger.debug "\n\n"
@@ -51,6 +53,7 @@ class Shopify::Product < Shopify::Importer
       raise "Could not save #{record.class}, see log above \n\n"
     end
 
+    # Create images
     if images.present?
       threads = []
       images.sort_by{|i| i.position}.each do |shopify_image|
@@ -64,12 +67,62 @@ class Shopify::Product < Shopify::Importer
     end
 
 
+    if variants.size > 1
+      
+      # Create option type option values
+      options.each do |option|
+        option_type_name =  get_option_type_name(option)
+        spree_option_type = Spree::OptionType.find_by(name: option_type_name)
+        if spree_option_type.nil?
+          spree_option_type = Spree::OptionType.create!(name: option_type_name, presentation: option.name)
+          option.values.each do |ov|
+            spree_option_type.option_values.create!(name: ov, presentation: ov)
+          end
+        end
+        record.option_types << spree_option_type
+      end
+
+      # create variants
+      variants.each do |variant|
+        spree_variant = build_variant(record, variant)
+        
+        [1, 2, 3].each do |i|
+          variant_option_value = variant.send("option#{i}")
+          variant_option_type = options.find{|op| op.position == i}
+
+          if variant_option_type && variant_option_value
+            spree_option_type = Spree::OptionType.find_by(name: get_option_type_name(variant_option_type))
+            spree_option_value = spree_option_type.option_values.find_by(name: variant_option_value)
+            
+            if spree_option_value
+              spree_variant.option_values << spree_option_value
+
+            end
+          end
+        end
+
+        spree_variant.save
+      end
+
+    end
+
 
     self.imported_product = record
     self
   end
 
+  def get_option_type_name(option)
+    product_type.blank? ? option.name : "#{product_type}-#{option.name}"
+  end
 
+  def build_variant(spree_product, variant)
+    spree_variant = spree_product.variants.build(
+                      sku: variant.sku,
+                      weight: variant.grams,
+                      price: variant.price,
+                      # is_master: (variant.position == 1),
+                    )
+  end
 
   def default_variant
     @default_variant ||= variants.first{|x| x.position == 1}

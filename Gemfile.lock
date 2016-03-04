@@ -122,7 +122,7 @@ GEM
       devise (>= 2.1.0)
     erubis (2.7.0)
     execjs (2.6.0)
-    faker (1.4.3)
+    faker (1.6.3)
       i18n (~> 0.5)
     ffaker (1.32.1)
     font-awesome-rails (4.5.0.1)
@@ -341,7 +341,7 @@ DEPENDENCIES
   awesome_print
   byebug
   coffee-rails (~> 4.1.0)
-  faker
+  faker (= 1.6.3)
   jbuilder (~> 2.0)
   jquery-rails
   mysql2

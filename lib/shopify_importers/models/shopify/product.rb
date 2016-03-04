@@ -1,9 +1,6 @@
 class Shopify::Product < Shopify::Importer
-  # self.site = Shopify.store_url
-  self.site = "http://instanatural.com"
+  # self.site = "http://instanatural.com"
   self.collection_name = "products"
-  self.include_root_in_json =  true
-  self.logger = Rails.logger
 
   attr_accessor :imported_product
 
@@ -24,43 +21,66 @@ class Shopify::Product < Shopify::Importer
 
   def import 
 
-    record = Spree::Product.new(
+    spree_product = Spree::Product.new(
                                   # id: id,
                                   name: title,
                                   description: body_html,
                                   slug: handle,
                                   available_on: published_at,
                                   price: default_variant.price,
+                                  weight: default_variant.grams,
                                   shipping_category: Shopify::Product.default_shipping_category,
-                                  prototype_id: product_prototype_id,
+                                  # prototype_id: product_prototype_id,
                                   created_at: created_at,
                                   updated_at: updated_at                                  
       )
 
     # set master variant's sku
-    record.sku = default_variant.sku if variants.size == 1
+    spree_product.sku = default_variant.sku if variants.size == 1
 
-    unless record.save
+
+    unless spree_product.save
       Rails.logger.debug "\n\n"
       Rails.logger.debug "#" * 80
-      Rails.logger.debug "Could not save #{record.class}: #{record.inspect}"
+      Rails.logger.debug "Could not save #{spree_product.class}: #{spree_product.inspect}"
       Rails.logger.debug "\n"
-      Rails.logger.debug "Creating #{record.class} Shopify Data:  #{self.inspect}"
+      Rails.logger.debug "Creating #{spree_product.class} Shopify Data:  #{self.inspect}"
       Rails.logger.debug "\n"
-      Rails.logger.debug "Errors: #{record.errors.inspect}"
+      Rails.logger.debug "Errors: #{spree_product.errors.inspect}"
       Rails.logger.debug "\n"
       Rails.logger.debug "#" * 80
-      raise "Could not save #{record.class}, see log above \n\n"
+      raise "Could not save #{spree_product.class}, see log above \n\n"
     end
 
-    # Create images
+    # is master variant backorderable
+    set_backorderable(spree_product.master, default_variant)
+    
+
+    # Assign category taxons to spree product from shopify's product_type
+    category_taxon = get_category_taxon
+    if category_taxon
+      spree_product.taxons << category_taxon
+    end
+
+    # Assign Tags as taxons
+    if tags.present?
+      spree_product.taxons << get_tag_taxons(tags)
+    end
+
+    # Assign Brand as taxons
+    if vendor.present?
+      spree_product.taxons << get_brand_taxon
+    end
+
+
+    # # Create images
     if images.present?
       threads = []
       images.sort_by{|i| i.position}.each do |shopify_image|
         threads << fork do
           image = Spree::Image.new(created_at: shopify_image.created_at, updated_at: shopify_image.updated_at)
           image.attachment = shopify_image.src 
-          record.master_images << image if image.save
+          spree_product.master_images << image if image.save
         end
       end
        threads.each { |thr| Process.waitpid(thr) }
@@ -75,16 +95,18 @@ class Shopify::Product < Shopify::Importer
         spree_option_type = Spree::OptionType.find_by(name: option_type_name)
         if spree_option_type.nil?
           spree_option_type = Spree::OptionType.create!(name: option_type_name, presentation: option.name)
-          option.values.each do |ov|
-            spree_option_type.option_values.create!(name: ov, presentation: ov)
-          end
         end
-        record.option_types << spree_option_type
+        
+        option.values.each do |ov|
+          spree_option_type.option_values.find_or_create_by(name: ov, presentation: ov)
+        end
+
+        spree_product.option_types << spree_option_type
       end
 
       # create variants
       variants.each do |variant|
-        spree_variant = build_variant(record, variant)
+        spree_variant = build_variant(spree_product, variant)
         
         [1, 2, 3].each do |i|
           variant_option_value = variant.send("option#{i}")
@@ -92,6 +114,7 @@ class Shopify::Product < Shopify::Importer
 
           if variant_option_type && variant_option_value
             spree_option_type = Spree::OptionType.find_by(name: get_option_type_name(variant_option_type))
+            
             spree_option_value = spree_option_type.option_values.find_by(name: variant_option_value)
             
             if spree_option_value
@@ -101,23 +124,41 @@ class Shopify::Product < Shopify::Importer
           end
         end
 
-        spree_variant.save
+        spree_variant.save!
+
+        # set if the variant is backorderable
+         set_backorderable(spree_variant, variant)
       end
 
     end
 
 
-    self.imported_product = record
+    self.imported_product = spree_product
     self
   end
 
   def get_option_type_name(option)
-    product_type.blank? ? option.name : "#{product_type}-#{option.name}"
+    if Shopify.config[:global_option_types]
+      option.name
+    else
+      product_type.blank? ? option.name : "#{product_type}-#{option.name}"
+    end
   end
 
   def build_variant(spree_product, variant)
+    sku = variant.sku
+    count = Spree::Variant.where(sku: sku).count
+    
+    if count > 0
+      if Shopify.config[:adjust_duplicate_sku] 
+        sku = "" 
+      else
+        raise "Variant with sku: #{sku} already exists"
+      end
+    end
+
     spree_variant = spree_product.variants.build(
-                      sku: variant.sku,
+                      sku: sku,
                       weight: variant.grams,
                       price: variant.price,
                       # is_master: (variant.position == 1),
@@ -128,12 +169,42 @@ class Shopify::Product < Shopify::Importer
     @default_variant ||= variants.first{|x| x.position == 1}
   end
 
-  def product_prototype_id
-    if product_type.present?
-      prototype = Spree::Prototype.find_or_create_by(name: product_type)
-      prototype.id
-    end
+  def get_brand_taxonomy
+    @@brand_taxonomy ||= Spree::Taxonomy.find_or_create_by(name: 'Brand')
   end
+
+  def get_brand_taxon
+    if vendor.present?
+      taxon = get_brand_taxonomy.taxons.find_or_create_by(name: vendor, parent_id: get_brand_taxonomy.root.id)
+    end    
+  end
+
+  def get_category_taxonomy
+    @@category_taxonomy ||= Spree::Taxonomy.find_or_create_by(name: 'Categories')
+  end
+
+  def get_category_taxon
+    if product_type.present?
+      taxon = get_category_taxonomy.taxons.find_or_create_by(name: product_type, parent_id: get_category_taxonomy.root.id)
+    end    
+  end
+
+  def get_tag_taxons(tags)
+    @@tag_taxonomy ||= Spree::Taxonomy.find_or_create_by(name: 'Tags')
+    tags.split(',').collect{|tag| @@tag_taxonomy.taxons.find_or_create_by(name: tag.strip, parent_id: @@tag_taxonomy.root.id)}
+  end
+
+  def set_backorderable(spree_variant, shopify_variant)
+    inventory_policy = shopify_variant.inventory_policy rescue ""
+    spree_variant.stock_items.first.update_attribute(:backorderable, inventory_policy == "continue")
+  end
+
+  # def product_prototype_id
+  #   if product_type.present?
+  #     prototype = Spree::Prototype.find_or_create_by(name: product_type)
+  #     prototype.id
+  #   end
+  # end
 
 
 

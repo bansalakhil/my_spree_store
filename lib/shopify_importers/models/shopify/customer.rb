@@ -1,8 +1,5 @@
 class Shopify::Customer < Shopify::Importer
-  self.site = Shopify.store_url
   self.collection_name = "customers"
-  self.include_root_in_json =  true
-  self.logger = Rails.logger
 
 
   attr_accessor :imported_user
@@ -69,7 +66,7 @@ class Shopify::Customer < Shopify::Importer
 
 
 
-
+##########################################################################
 
 # {
 #   "customer": {
@@ -119,9 +116,7 @@ class Shopify::Customer < Shopify::Importer
                                     address1: Faker::Address.street_address,
                                     city: Faker::Address.city,
                                     country: "US",
-                                    province:  "FL",
-                                    created_at: created_at,
-                                    updated_at: updated_at
+                                    province:  "FL"
       )
 
     metafield = Shopify::Metafield.new(
@@ -137,15 +132,17 @@ class Shopify::Customer < Shopify::Importer
     customer
   end
 
+
+  def self.seed
+    4.times do
+      fork{
+        100.times do 
+          c = Shopify::Customer.get_fake_customer
+          c.save
+        end
+      }
+    end
+  end
+
 end
 
-
-# 4.times do
-#   fork{
-#     100.times do 
-#       c = Shopify::Customer.get_fake_customer
-#       c.save
-#     end
-#   }
-# end
-# 

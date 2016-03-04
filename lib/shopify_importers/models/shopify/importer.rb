@@ -1,5 +1,8 @@
 class Shopify::Importer < ActiveResource::Base
 
+  self.site = Shopify.store_url
+  self.include_root_in_json =  true
+  self.logger = Rails.logger
 
 
   def self.fetch_resources(limit: 50, page: 1)

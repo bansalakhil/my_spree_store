@@ -4,9 +4,6 @@ class Shopify::Product < Shopify::Importer
 
   attr_accessor :imported_record
 
-  def self.default_shipping_category
-    @@default_shipping_category ||= Spree::ShippingCategory.find_or_create_by(name: Shopify.config[:shipping_category])
-  end
 
   # def self.fetch_and_import(page: 1, per_page: Shopify.config[:per_page])
   #   # products = fetch_all(page: page, per_page: per_page)
@@ -29,8 +26,10 @@ class Shopify::Product < Shopify::Importer
                                   slug: handle,
                                   available_on: published_at,
                                   price: default_variant.price,
+                                  cost_price: default_variant.compare_at_price,
                                   weight: default_variant.grams,
-                                  shipping_category: Shopify::Product.default_shipping_category,
+                                  shipping_category: get_shipping_category,
+                                  tax_category_id: get_tax_category_id(default_variant),
                                   # prototype_id: product_prototype_id,
                                   created_at: created_at,
                                   updated_at: updated_at                                  
@@ -142,10 +141,13 @@ class Shopify::Product < Shopify::Importer
       end
     end
 
+
     spree_variant = imported_record.variants.build(
                       sku: sku,
                       weight: variant.grams,
                       price: variant.price,
+                      cost_price: variant.compare_at_price,
+                      tax_category_id: get_tax_category_id(variant),
                       # is_master: (variant.position == 1),
                     )
   end
@@ -154,8 +156,20 @@ class Shopify::Product < Shopify::Importer
     @default_variant ||= variants.first{|x| x.position == 1}
   end
 
+  def get_tax_category_id(variant)
+    variant.taxable? ? get_tax_category.id : nil
+  end
+
   def get_brand_taxonomy
     @@brand_taxonomy ||= Spree::Taxonomy.find_or_create_by(name: 'Brand')
+  end
+
+  def get_shipping_category
+    @@shipping_category ||= Spree::ShippingCategory.find_or_create_by(name: Shopify.config[:shipping_category])
+  end
+
+  def get_tax_category
+    @@tax_category ||= Spree::TaxCategory.find_or_create_by(name: Shopify.config[:tax_category])
   end
 
   def get_brand_taxon
@@ -185,6 +199,8 @@ class Shopify::Product < Shopify::Importer
   end
 
   def set_stock_quantity(variant, qty)
+    return unless Shopify.config[:import_inventory]
+
     stock_location = get_stock_location
     Rails.logger.debug "Adding Stock QTY: #{variant.sku}: #{qty}"
     stock_movement = stock_location.stock_movements.build(quantity: qty)

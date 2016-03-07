@@ -10,8 +10,11 @@ development:
   shipping_category: "ShopifyProducts" 
   stock_location: "ShopifyStockLocation"
   tax_category: "ShopifyTaxCategory"
-  import_product_images: !true
+  import_product_images: false
   import_inventory: true
+
+  # import product SEO metadata(title and description). PLEASE NOTE: IF SET TRUE, ONE API CALL PER PRODUCT WILL BE MADE.
+  import_metadata: false
 
   # set true,  if, all option types global. Means Shoe sizes(7, 8, 9 etc) and Jeans sizes(36, 38 etc) will map under same option.
   # set false, if product_type specific option types. In this case shopify's product_type will be prepended like: Shirt > Size. Presentation will be Size only

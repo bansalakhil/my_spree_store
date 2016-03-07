@@ -31,6 +31,8 @@ class Shopify::Product < Shopify::Importer
                                   shipping_category: get_shipping_category,
                                   tax_category_id: get_tax_category_id(default_variant),
                                   # prototype_id: product_prototype_id,
+                                  meta_title: get_meta_title,
+                                  meta_description: get_meta_description,
                                   created_at: created_at,
                                   updated_at: updated_at                                  
       )
@@ -196,6 +198,21 @@ class Shopify::Product < Shopify::Importer
 
   def get_stock_location
     @@stock_location ||= Spree::StockLocation.find_or_create_by(name: Shopify.config[:stock_location])
+  end
+
+  def get_meta_description
+    desc_tag = get_metafields.find{|mf| mf.key == "description_tag"}
+    desc_tag.nil? ? "" : desc_tag.value
+  end
+
+  def get_meta_title
+    title_tag = get_metafields.find{|mf| mf.key == "title_tag"}
+    title_tag.nil? ? "" : title_tag.value    
+  end
+
+  def get_metafields
+    return {} unless Shopify.config[:import_metadata]
+    @metafields ||= Shopify::Metafield.find(:all, :params => {:resource => self.class.collection_name, :resource_id => id})
   end
 
   def set_stock_quantity(variant, qty)

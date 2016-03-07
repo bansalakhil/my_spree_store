@@ -36,10 +36,12 @@ class Shopify::Product < Shopify::Importer
                                   updated_at: updated_at                                  
       )
 
-    # set master variant's sku
-    spree_product.sku = default_variant.sku if variants.size == 1
+    if variants.size == 1
+      # set master variant's sku
+      spree_product.sku = default_variant.sku 
+    end
 
-
+    Rails.logger.debug "Creating Product: #{spree_product.name}(sku: #{spree_product.sku}), Shopify Product ID: #{self.id} "
     unless spree_product.save
       Rails.logger.debug "\n\n"
       Rails.logger.debug "#" * 80
@@ -52,6 +54,9 @@ class Shopify::Product < Shopify::Importer
       Rails.logger.debug "#" * 80
       raise "Could not save #{spree_product.class}, see log above \n\n"
     end
+
+    # set inventory for master variant
+    set_stock_quantity(spree_product.master, default_variant.inventory_quantity)
 
     self.imported_record = spree_product
 
@@ -175,9 +180,23 @@ class Shopify::Product < Shopify::Importer
     tags.collect{|tag| @@tag_taxonomy.taxons.find_or_create_by(name: tag.strip, parent_id: @@tag_taxonomy.root.id)}
   end
 
+  def get_stock_location
+    @@stock_location ||= Spree::StockLocation.find_or_create_by(name: Shopify.config[:stock_location])
+  end
+
+  def set_stock_quantity(variant, qty)
+    stock_location = get_stock_location
+    Rails.logger.debug "Adding Stock QTY: #{variant.sku}: #{qty}"
+    stock_movement = stock_location.stock_movements.build(quantity: qty)
+    stock_movement.stock_item = stock_location.set_up_stock_item(variant)
+    stock_movement.save!    
+  end
+
   def set_backorderable(spree_variant, shopify_variant)
     inventory_policy = shopify_variant.inventory_policy rescue ""
-    spree_variant.stock_items.first.update_attribute(:backorderable, inventory_policy == "continue")
+    spree_variant.stock_items.each do |si|
+      si.update_attribute(:backorderable, inventory_policy == "continue")
+    end
   end
 
 
@@ -206,7 +225,11 @@ class Shopify::Product < Shopify::Importer
           end
         end
 
+        Rails.logger.debug "Adding Variant: #{variant.sku}"
         spree_variant.save!
+        # set inventory
+        set_stock_quantity(spree_variant, variant.inventory_quantity)
+
 
         # set if the variant is backorderable
          set_backorderable(spree_variant, variant)

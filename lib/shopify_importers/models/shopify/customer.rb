@@ -1,28 +1,16 @@
 class Shopify::Customer < Shopify::Importer
   self.collection_name = "customers"
 
-
-  attr_accessor :imported_user
+  attr_accessor :imported_record
 
   has_many :metafields, class_name: "shopify/metafield"
   has_many :addresses, class_name: "shopify/addresses"
-
-
-
-  def self.fetch_and_import(page: 1, per_page: Shopify.config[:per_page])
-    customers = fetch_all(page: page, per_page: per_page)
-
-    Spree::user_class.transaction do 
-      customers.collect!(&:import)
-    end
-    customers
-  end
-
 
   def import 
     country = Spree::Country.find_by(iso: default_address.country_code)
     random_password = SecureRandom.hex(8)
 
+    # Customer's default address
     address = {
                 firstname: default_address.first_name,
                 lastname: default_address.last_name,
@@ -36,7 +24,8 @@ class Shopify::Customer < Shopify::Importer
                 state: country.states.find_by(abbr: default_address.province_code)
     }
 
-    user = Spree.user_class.new(
+    # Spree user object
+    spree_user = Spree.user_class.new(
                                   # id: id,
                                   email: email,
                                   password: random_password,
@@ -47,20 +36,20 @@ class Shopify::Customer < Shopify::Importer
                                   updated_at: updated_at
       )
 
-    unless user.save
+    unless spree_user.save
       Rails.logger.debug "\n\n"
       Rails.logger.debug "#" * 80
-      Rails.logger.debug "Could not save Spree::User: #{user.inspect}"
+      Rails.logger.debug "Could not save Spree::User: #{spree_user.inspect}"
       Rails.logger.debug "\n"
       Rails.logger.debug "Creating Spree::User Shopify Data:  #{self.inspect}"
       Rails.logger.debug "\n"
-      Rails.logger.debug "Errors: #{user.errors.inspect}"
+      Rails.logger.debug "Errors: #{spree_user.errors.inspect}"
       Rails.logger.debug "\n"
       Rails.logger.debug "#" * 80
       raise "Could not save Spree::User, see log above \n\n"
     end
 
-    self.imported_user = user
+    self.imported_record = spree_user
     self
   end
 
@@ -101,7 +90,6 @@ class Shopify::Customer < Shopify::Importer
 
   @@countries =  nil
   def self.get_fake_customer
-
     args = {
               first_name: Faker::Name.first_name, 
               last_name: Faker::Name.last_name,
@@ -109,7 +97,7 @@ class Shopify::Customer < Shopify::Importer
               verified_email: true
     }
 
-    customer = new(args)
+    shopify_customer = new(args)
     address = Shopify::Address.new(
                                     first_name: Faker::Name.first_name, 
                                     last_name: Faker::Name.last_name,
@@ -127,9 +115,9 @@ class Shopify::Customer < Shopify::Importer
       )
 
 
-    customer.addresses = [address]
-    customer.metafields = [metafield]
-    customer
+    shopify_customer.addresses = [address]
+    shopify_customer.metafields = [metafield]
+    shopify_customer
   end
 
 
@@ -137,8 +125,8 @@ class Shopify::Customer < Shopify::Importer
     4.times do
       fork{
         100.times do 
-          c = Shopify::Customer.get_fake_customer
-          c.save
+          customer = Shopify::Customer.get_fake_customer
+          customer.save
         end
       }
     end

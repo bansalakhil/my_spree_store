@@ -1,6 +1,4 @@
-class Shopify::Address < ActiveResource::Base
-  self.site = Shopify.store_url
+class Shopify::Address < Shopify::Importer
   self.collection_name = "addresses"
-
 
 end

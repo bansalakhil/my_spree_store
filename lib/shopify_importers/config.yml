@@ -7,6 +7,7 @@ development:
 
   # Default shipping category to be assigned for imported products
   shipping_category: "Shopify Products" 
+  import_product_images: true
 
   # set true,  if, all option types global. Means Shoe sizes(7, 8, 9 etc) and Jeans sizes(36, 38 etc) will map under same option.
   # set false, if product_type specific option types. In this case shopify's product_type will be prepended like: Shirt > Size. Presentation will be Size only

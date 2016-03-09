@@ -43,7 +43,7 @@ class Shopify::Customer < Shopify::Importer
       Rails.logger.debug "\n"
       Rails.logger.debug "Creating Spree::User Shopify Data:  #{self.inspect}"
       Rails.logger.debug "\n"
-      Rails.logger.debug "Errors: #{spree_user.errors.inspect}"
+      Rails.logger.debug "Errors: #{spree_user.errors.full_messages}"
       Rails.logger.debug "\n"
       Rails.logger.debug "#" * 80
       raise "Could not save Spree::User, see log above \n\n"

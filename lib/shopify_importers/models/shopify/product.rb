@@ -50,7 +50,7 @@ class Shopify::Product < Shopify::Importer
       Rails.logger.debug "\n"
       Rails.logger.debug "Creating #{spree_product.class} Shopify Data:  #{self.inspect}"
       Rails.logger.debug "\n"
-      Rails.logger.debug "Errors: #{spree_product.errors.inspect}"
+      Rails.logger.debug "Errors: #{spree_product.errors.full_messages}"
       Rails.logger.debug "\n"
       Rails.logger.debug "#" * 80
       raise "Could not save #{spree_product.class}, see log above \n\n"
@@ -150,6 +150,7 @@ class Shopify::Product < Shopify::Importer
                       price: variant.price,
                       cost_price: variant.compare_at_price,
                       tax_category_id: get_tax_category_id(variant),
+                      track_inventory: variant.inventory_management == "shopify",
                       # is_master: (variant.position == 1),
                     )
   end

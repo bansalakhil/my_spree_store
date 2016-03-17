@@ -11,7 +11,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema.define(version: 20160217066150) do
+ActiveRecord::Schema.define(version: 20160317104928) do
 
   create_table "friendly_id_slugs", force: :cascade do |t|
     t.string   "slug",           limit: 255, null: false
@@ -27,6 +27,112 @@ ActiveRecord::Schema.define(version: 20160217066150) do
   add_index "friendly_id_slugs", ["slug", "sluggable_type"], name: "index_friendly_id_slugs_on_slug_and_sluggable_type", using: :btree
   add_index "friendly_id_slugs", ["sluggable_id"], name: "index_friendly_id_slugs_on_sluggable_id", using: :btree
   add_index "friendly_id_slugs", ["sluggable_type"], name: "index_friendly_id_slugs_on_sluggable_type", using: :btree
+
+  create_table "import_refs", force: :cascade do |t|
+    t.string   "shopify_type", limit: 255
+    t.string   "shopify_id",   limit: 255
+    t.string   "spree_type",   limit: 255
+    t.string   "spree_id",     limit: 255
+    t.datetime "created_at",               null: false
+    t.datetime "updated_at",               null: false
+  end
+
+  add_index "import_refs", ["shopify_type", "shopify_id"], name: "index_import_refs_on_shopify_type_and_shopify_id", using: :btree
+  add_index "import_refs", ["spree_type", "spree_id"], name: "index_import_refs_on_spree_type_and_spree_id", using: :btree
+
+  create_table "shopify_addresses", force: :cascade do |t|
+    t.integer "customer_id",   limit: 8
+    t.string  "first_name",    limit: 255
+    t.string  "last_name",     limit: 255
+    t.string  "company",       limit: 255
+    t.string  "address1",      limit: 255
+    t.string  "address2",      limit: 255
+    t.string  "city",          limit: 255
+    t.string  "province",      limit: 255
+    t.string  "country",       limit: 255
+    t.string  "zip",           limit: 255
+    t.string  "phone",         limit: 255
+    t.string  "name",          limit: 255
+    t.string  "province_code", limit: 255
+    t.string  "country_code",  limit: 255
+    t.string  "country_name",  limit: 255
+    t.boolean "default"
+  end
+
+  create_table "shopify_customers", force: :cascade do |t|
+    t.string   "email",                limit: 255
+    t.boolean  "accepts_marketing"
+    t.string   "first_name",           limit: 255
+    t.string   "last_name",            limit: 255
+    t.integer  "orders_count",         limit: 4
+    t.string   "state",                limit: 255
+    t.string   "total_spent",          limit: 255
+    t.integer  "last_order_id",        limit: 8
+    t.text     "note",                 limit: 65535
+    t.boolean  "verified_email"
+    t.string   "multipass_identifier", limit: 255
+    t.boolean  "tax_exempt"
+    t.string   "tags",                 limit: 255
+    t.string   "last_order_name",      limit: 255
+    t.datetime "created_at"
+    t.datetime "updated_at"
+  end
+
+  create_table "shopify_images", force: :cascade do |t|
+    t.integer  "product_id",  limit: 8
+    t.integer  "position",    limit: 4
+    t.text     "src",         limit: 65535
+    t.text     "variant_ids", limit: 65535
+    t.datetime "created_at"
+    t.datetime "updated_at"
+  end
+
+  create_table "shopify_options", force: :cascade do |t|
+    t.integer "product_id", limit: 8
+    t.string  "name",       limit: 255
+    t.text    "values",     limit: 65535
+    t.integer "position",   limit: 4
+  end
+
+  create_table "shopify_products", force: :cascade do |t|
+    t.string   "title",           limit: 255
+    t.text     "body_html",       limit: 65535
+    t.string   "vendor",          limit: 255
+    t.string   "product_type",    limit: 255
+    t.string   "handle",          limit: 255
+    t.string   "template_suffix", limit: 255
+    t.string   "published_scope", limit: 255
+    t.string   "tags",            limit: 255
+    t.datetime "created_at"
+    t.datetime "updated_at"
+    t.datetime "published_at"
+  end
+
+  create_table "shopify_variants", force: :cascade do |t|
+    t.integer  "product_id",             limit: 8
+    t.string   "title",                  limit: 255
+    t.string   "price",                  limit: 255
+    t.string   "sku",                    limit: 255
+    t.integer  "position",               limit: 4
+    t.integer  "grams",                  limit: 4
+    t.string   "inventory_policy",       limit: 255
+    t.string   "compare_at_price",       limit: 255
+    t.string   "fulfillment_service",    limit: 255
+    t.string   "inventory_management",   limit: 255
+    t.string   "option1",                limit: 255
+    t.string   "option2",                limit: 255
+    t.string   "option3",                limit: 255
+    t.boolean  "requires_shipping"
+    t.boolean  "taxable"
+    t.string   "barcode",                limit: 255
+    t.integer  "inventory_quantity",     limit: 4
+    t.integer  "old_inventory_quantity", limit: 4
+    t.integer  "image_id",               limit: 4
+    t.integer  "weight",                 limit: 4
+    t.string   "weight_unit",            limit: 255
+    t.datetime "created_at"
+    t.datetime "updated_at"
+  end
 
   create_table "spree_addresses", force: :cascade do |t|
     t.string   "firstname",         limit: 255

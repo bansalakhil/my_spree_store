@@ -18,6 +18,11 @@ class Shopify::Product < Shopify::Importer
 
   def import 
 
+
+    # save ShopifyProduct with variants, options and images
+    save_shopify_product    
+
+
     # Create product with master variant.
     spree_product = Spree::Product.new(
                                   # id: id,
@@ -59,7 +64,12 @@ class Shopify::Product < Shopify::Importer
     # set inventory for master variant
     set_stock_quantity(spree_product.master, default_variant.inventory_quantity)
 
+    if variants.size == 1
+      ImportRef.create!(shopify_type: "Shopify::Variant", shopify_id: default_variant.id, spree_type: "Spree::Variant", spree_id: spree_product.master.id)
+    end    
+
     self.imported_record = spree_product
+    ImportRef.create!(shopify_type: self.class, shopify_id: id, spree_type: self.imported_record.class, spree_id: self.imported_record.id)
 
     # is master variant backorderable
     set_backorderable(spree_product.master, default_variant)
@@ -137,7 +147,7 @@ class Shopify::Product < Shopify::Importer
     
     if count > 0
       if Shopify.config[:adjust_duplicate_sku] 
-        sku = "" 
+        sku = "#{sku}-#{variant.id}"
       else
         raise "Variant with sku: #{sku} already exists"
       end
@@ -261,6 +271,8 @@ class Shopify::Product < Shopify::Importer
 
         Rails.logger.debug "Adding Variant: #{variant.sku}"
         spree_variant.save!
+        ImportRef.create!(shopify_type: "Shopify::Variant", shopify_id: variant.id, spree_type: "Spree::Variant", spree_id: spree_variant.id)
+        
         # set inventory
         set_stock_quantity(spree_variant, variant.inventory_quantity)
 
@@ -288,6 +300,47 @@ class Shopify::Product < Shopify::Importer
       imported_record.option_types << spree_option_type
     end
   end    
+
+  def save_shopify_product
+    product = self 
+    
+    ShopifyProduct.transaction do 
+      sp = ShopifyProduct.new
+
+      ShopifyProduct::ATTRIBUTES.each do |attr|
+        sp.public_send("#{attr}=", product.public_send(attr))
+      end
+      sp.save!
+
+      variants.each do |variant|
+        sv = sp.shopify_variants.build
+        
+        ShopifyVariant::ATTRIBUTES.each do |attr|
+          sv.public_send("#{attr}=", variant.public_send(attr))
+        end
+        sv.save!
+      end
+
+      options.each do |option|
+        so = sp.shopify_options.build
+        
+        ShopifyOption::ATTRIBUTES.each do |attr|
+          so.public_send("#{attr}=", option.public_send(attr))
+        end
+        so.save!
+      end
+
+      images.each do |image|
+        si = sp.shopify_images.build
+        
+        ShopifyImage::ATTRIBUTES.each do |attr|
+          si.public_send("#{attr}=", image.public_send(attr))
+        end
+        si.save!
+      end
+
+    end
+  end
 
   # def product_prototype_id
   #   if product_type.present?

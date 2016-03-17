@@ -7,6 +7,11 @@ class Shopify::Customer < Shopify::Importer
   has_many :addresses, class_name: "shopify/addresses"
 
   def import 
+
+    # save ShopifyCustomer with Address
+    save_shopify_customer    
+
+
     country = Spree::Country.find_by(iso: default_address.country_code)
     random_password = SecureRandom.hex(8)
 
@@ -50,10 +55,38 @@ class Shopify::Customer < Shopify::Importer
     end
 
     self.imported_record = spree_user
+
+    ImportRef.create!(shopify_type: self.class, shopify_id: id, spree_type: self.imported_record.class, spree_id: self.imported_record.id)
     self
   end
 
+  
+  private
 
+  def save_shopify_customer
+    customer = self 
+    
+    ShopifyCustomer.transaction do 
+      sc = ShopifyCustomer.new
+
+      ShopifyCustomer::ATTRIBUTES.each do |attr|
+        sc.public_send("#{attr}=", customer.public_send(attr))
+      end
+      sc.save!
+
+      addresses.each do |address|
+        sa = sc.shopify_addresses.build
+        
+        ShopifyAddress::ATTRIBUTES.each do |attr|
+          sa.public_send("#{attr}=", address.public_send(attr))
+        end
+        sa.save!
+      end
+
+
+    end
+
+  end
 
 ##########################################################################
 

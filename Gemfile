@@ -46,7 +46,7 @@ end
 
 gem 'awesome_print'
 gem 'activeresource', require: "active_resource"
-gem 'faker', '1.6.3'
+#gem 'faker', '1.6.3'
 
 gem 'spree', '3.0.5'
 gem 'spree_gateway', github: 'spree/spree_gateway', branch: '3-0-stable'

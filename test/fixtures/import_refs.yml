@@ -1,0 +1,13 @@
+# Read about fixtures at http://api.rubyonrails.org/classes/ActiveRecord/FixtureSet.html
+
+one:
+  shopify_type: MyString
+  shopify_id: MyString
+  spree_type: MyString
+  spree_id: MyString
+
+two:
+  shopify_type: MyString
+  shopify_id: MyString
+  spree_type: MyString
+  spree_id: MyString
